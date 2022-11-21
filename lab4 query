@@ -1,0 +1,147 @@
+create table Person(
+person_id decimal(12) not null primary key,
+first_name varchar(32) not null,
+last_name varchar(32) not null,
+username varchar(20) not null);
+
+create table Post(
+post_id decimal(12) not null primary key,
+person_id decimal(12) not null,
+content varchar(255) not null,
+created_on date not null,
+summary varchar(13) not null,
+foreign key (person_id) references Person(person_id));
+
+create table Likes(
+likes_id decimal(12) not null primary key,
+person_id decimal(12) not null,
+post_id decimal(12) not null,
+liked_on date,
+foreign key (person_id) references Person(person_id),
+foreign key (post_id) references Post(post_id));
+
+
+insert into person values(PERSON_SEQ.nextval,'John','Wick','johnwick03');
+insert into person values(PERSON_SEQ.nextval,'Jesse','Diaz','jessed');
+insert into person values(PERSON_SEQ.nextval,'David','Russell','david01');
+insert into person values(PERSON_SEQ.nextval,'Terry','Peter','terryP111');
+insert into person values(PERSON_SEQ.nextval,'Kevin','Nelson','kevinnull');
+
+insert into post values(Post_SEQ.nextval,(select person_id from person where username = 'johnwick03'),'Aparrel & Goods introduction video made', CAST('15-JAN-2022' AS DATE), 'aparrel go...');
+insert into post values(Post_SEQ.nextval,(select person_id from person where username = 'johnwick03'),'The Dota Plus Spring Update is live', CAST('13-FEB-2022' AS DATE), 'the dota plus...');
+insert into post values(Post_SEQ.nextval,(select person_id from person where username = 'jessed'),'The DPC Winter Tour Fantasy Treasure is now available', CAST('5-JAN-2022' AS DATE), 'the dpc w...');
+insert into post values(Post_SEQ.nextval,(select person_id from person where username = 'david01'),'Aghanims Battle Level Bundle is now available', CAST('23-JAN-2022' AS DATE), 'aghanim...');
+insert into post values(Post_SEQ.nextval,(select person_id from person where username = 'terryP111'),'We are back to our Lower Bracket ', CAST('15-MAY-2021' AS DATE), 'we are...');
+insert into post values(Post_SEQ.nextval,(select person_id from person where username = 'kevinnull'),'Be sure to follow us on all of our channels', CAST('3-MAR-2021' AS DATE), 'be sure...');
+insert into post values(Post_SEQ.nextval,(select person_id from person where username = 'david01'),'With broadcasts in five languages', CAST('13-NOV-2021' AS DATE), 'with bro...');
+insert into post values(Post_SEQ.nextval,(select person_id from person where username = 'david01'),'The International 2021 comes to a close', CAST('21-DEC-2021' AS DATE), 'the intern...');
+
+insert into likes values(LIKES_SEQ.nextval, (select person_id from person where username = 'david01'), (select post_id from post where summary = 'we are...'), CAST('13-FEB-2022' AS DATE));
+insert into likes values(LIKES_SEQ.nextval, (select person_id from person where username = 'terryP111'), (select post_id from post where summary = 'the dota...'), CAST('5-MAR-2022' AS DATE));
+insert into likes values(LIKES_SEQ.nextval, (select person_id from person where username = 'kevinnull'), (select post_id from post where summary = 'be sure...'), CAST('1-MAR-2022' AS DATE));
+insert into likes values(LIKES_SEQ.nextval, (select person_id from person where username = 'jessed'), (select post_id from post where summary = 'with bro...'), CAST('28-FEB-2022' AS DATE));
+
+
+
+CREATE OR REPLACE PROCEDURE ADD_person(
+ first_name_arg IN VARCHAR, 
+ last_name_arg IN VARCHAR,
+ username_arg IN VARCHAR)
+IS
+BEGIN
+ INSERT INTO person (person_id, first_name, last_name, username)
+ VALUES(person_seq.nextval,first_name_arg,last_name_arg, username_arg);
+
+END; 
+
+
+
+
+CREATE OR REPLACE PROCEDURE ADD_post(
+ person_id IN DECIMAL,
+ content IN VARCHAR, 
+ created_on IN DATE) 
+IS
+ v_summary VARCHAR(13); 
+BEGIN
+
+ v_summary := SUBSTR(content, 1, 10) || '...';
+
+ INSERT INTO post (post_id, person_id, content, created_on, summary)
+ VALUES(post_seq.nextval, person_id, content, created_on, v_summary);
+END;
+
+BEGIN
+    ADD_post(109,'Z FACTORY official new merchandise is now on per-selling', CAST('02-MAR-2022' AS DATE));
+END;
+/
+
+
+
+
+CREATE OR REPLACE PROCEDURE ADD_like(
+ p_post_id IN DECIMAL, 
+ p_username IN VARCHAR,
+ p_liked_on IN DATE) 
+IS
+ v_person_id DECIMAL(12); 
+
+BEGIN
+
+ SELECT person_id
+ INTO v_person_id
+ FROM Person
+ WHERE username = p_username;
+
+  INSERT INTO LIKES(likes_id, post_id, person_id, liked_on)
+  VALUES(LIKES_SEQ.nextval, p_post_id, v_person_id, p_liked_on);
+END;
+
+
+
+create or replace TRIGGER correct_like_date
+BEFORE UPDATE OR INSERT ON likes
+FOR EACH ROW
+DECLARE
+ v_created_on DATE;
+BEGIN
+ SELECT created_on
+ INTO v_created_on
+ FROM post
+ JOIN likes on post.post_id = likes.post_id;
+
+ IF to_date(:NEW.liked_on) < to_date(v_created_on) THEN
+ RAISE_APPLICATION_ERROR(-20001,'invalid liked date！');
+ END IF;
+END;
+
+
+create or replace TRIGGER correct_like_date
+BEFORE UPDATE OR INSERT ON likes
+FOR EACH ROW
+DECLARE
+ v_created_on DATE;
+BEGIN
+ SELECT created_on
+ INTO v_created_on
+ FROM post
+ WHERE post_id = :NEW.post_id;
+
+ IF to_date(:NEW.liked_on) < to_date(v_created_on) THEN
+ RAISE_APPLICATION_ERROR(-20001,'invalid liked date！');
+ END IF;
+END;
+
+
+insert into likes values(100, 143, 68, CAST('8-FEB-2022' AS DATE));
+
+
+CREATE OR REPLACE TRIGGER post_up_to_date
+BEFORE UPDATE ON Post
+FOR EACH ROW
+BEGIN
+ IF :OLD.content <> :NEW.content THEN
+ INSERT INTO post_content_history(post_id, old_post, new_post, change_date, summary)
+ VALUES(:NEW.post_id, :OLD.content, :NEW.content, current_date, substr(:NEW.CONTENT,1,10)||'...');
+ END IF;
+END; 
